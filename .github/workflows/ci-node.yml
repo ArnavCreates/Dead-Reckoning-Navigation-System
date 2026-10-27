@@ -28,10 +28,15 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile || pnpm install
-
-      - name: Build and Test Contracts & Backend
+      - name: Build and Test Backend
         run: |
-          pnpm --filter @idr/contracts build
-          pnpm --filter backend test
+          cd backend
+          pnpm install
+          pnpm run build
+          pnpm test
+
+      - name: Build Web Dashboard
+        run: |
+          cd web
+          pnpm install
+          pnpm run build

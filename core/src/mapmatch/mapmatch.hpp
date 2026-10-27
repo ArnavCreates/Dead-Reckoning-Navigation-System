@@ -77,24 +77,32 @@ public:
       return res;
     }
 
-    // Compute emission probabilities: Gaussian on orthogonal distance
-    // p(z | e) = (1 / sqrt(2*pi*sigma_map^2)) * exp(-d^2 / (2*sigma_map^2))
+    // Compute emission likelihoods and normalize to posterior probabilities in [0, 1]
     double sigma_map = 3.0; // 3 m map error
-    double best_posterior = 0.0;
-    CandidateEdge best_edge;
+    double sum_emission = 0.0;
 
     for (auto& cand : candidates) {
       double heading_diff = std::abs(std::remainder(heading_deg - cand.heading_deg, 360.0));
       double heading_factor = std::max(0.01, std::cos(heading_diff * DEG2RAD));
 
-      cand.emission_prob = (1.0 / (std::sqrt(2.0 * PI) * sigma_map)) *
-                           std::exp(-(cand.distance_m * cand.distance_m) / (2.0 * sigma_map * sigma_map)) *
+      cand.emission_prob = std::exp(-(cand.distance_m * cand.distance_m) / (2.0 * sigma_map * sigma_map)) *
                            heading_factor;
+      sum_emission += cand.emission_prob;
+    }
 
-      if (cand.emission_prob > best_posterior) {
-        best_posterior = cand.emission_prob;
-        best_edge = cand;
+    double best_posterior = 0.0;
+    CandidateEdge best_edge;
+
+    if (sum_emission > 1e-9) {
+      for (auto& cand : candidates) {
+        cand.emission_prob /= sum_emission;
+        if (cand.emission_prob > best_posterior) {
+          best_posterior = cand.emission_prob;
+          best_edge = cand;
+        }
       }
+    } else if (!candidates.empty()) {
+      best_edge = candidates[0];
     }
 
     res.matched_edge_id = best_edge.edge_id;
@@ -121,7 +129,8 @@ public:
 
     // Helical-ramp floor counting (USP 3): Delta_z = h_f * Delta_psi / (2*pi)
     // If vehicle completes 360-deg rotation on tight radius ramp
-    accumulated_yaw_rad_ += std::abs(heading_deg - last_heading_deg_) * DEG2RAD;
+    double delta_yaw_deg = std::abs(std::remainder(heading_deg - last_heading_deg_, 360.0));
+    accumulated_yaw_rad_ += delta_yaw_deg * DEG2RAD;
     last_heading_deg_ = heading_deg;
     if (accumulated_yaw_rad_ >= 2.0 * PI) {
       res.floor_change = 1;

@@ -18,7 +18,8 @@ struct NoiseScales {
   double alpha_nhc_lat{1.0};  // alpha_1: scales R_NHC(lat)
   double alpha_nhc_up{1.0};   // alpha_2: scales R_NHC(up)
   double alpha_speed{1.0};    // alpha_3: scales R_speed
-  double alpha_process{1.0};  // alpha_4: scales Q_a, Q_omega
+  double alpha_process{1.0};  // alpha_4: scales Q_a (accel process noise)
+  double alpha_gyro{1.0};     // alpha_5: scales Q_omega (gyro process noise)
 };
 
 class NoiseAdapterRunner {
@@ -102,6 +103,7 @@ public:
         scales.alpha_nhc_up  = std::pow(10.0, 3.0 * std::tanh(out_data[1]));
         scales.alpha_speed   = std::pow(10.0, 3.0 * std::tanh(out_data[2]));
         scales.alpha_process = std::pow(10.0, 3.0 * std::tanh(out_data[3]));
+        scales.alpha_gyro    = std::pow(10.0, 3.0 * std::tanh(out_data[4]));
         return scales;
       } catch (...) {
         // Fallback

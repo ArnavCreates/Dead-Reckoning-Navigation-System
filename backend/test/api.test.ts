@@ -13,8 +13,10 @@ async function runTests() {
   const { tripRoutes } = await import("../src/routes/trips.js");
   const { mapPackRoutes } = await import("../src/routes/mappacks.js");
   const fastify = (await import("fastify")).default;
+  const websocket = (await import("@fastify/websocket")).default;
 
   const app = fastify();
+  await app.register(websocket);
   await app.register(healthRoutes);
   await app.register(deviceRoutes);
   await app.register(ingestRoutes);

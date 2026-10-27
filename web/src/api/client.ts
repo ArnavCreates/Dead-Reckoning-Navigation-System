@@ -102,6 +102,9 @@ export class ApiClient {
       const res = await fetch(`${getApiBase()}/v1/live`);
       if (!res.ok) throw new Error("Offline");
       const geo = await res.json();
+      if (!geo.features || geo.features.length === 0) {
+        return this.generateFallbackDemo();
+      }
       return geo.features.map((f: any) => ({
         device_id: f.properties.device_id,
         trip_id: f.properties.trip_id,

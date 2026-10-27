@@ -155,7 +155,7 @@ public:
 
     Eigen::Matrix<double, 1, STATE_DIM> H = Eigen::Matrix<double, 1, STATE_DIM>::Zero();
     H.block<1,3>(0,3) = R_wv.transpose().row(0); // d(v_x^v)/dv
-    H(0,20) = v_tcn;                             // d(z)/d(s_v)
+    H(0,20) = -v_tcn;                            // d(z)/d(s_v) with negative feedback to converge s_v
 
     Eigen::Matrix<double, 1, 1> R;
     R(0,0) = std::max(1e-4, alpha3 * var_tcn);
@@ -323,9 +323,9 @@ private:
     v_veh(2) = std::clamp(v_veh(2), -2.0, 2.0);
     state_.v = R_wv * v_veh;
 
-    // Joseph form covariance update: P = (I - K*H)*P*(I - K*H)^T + K*R*K^T
+    // Joseph form covariance update: P = (I - K*H)*P*(I - K*H)^T + K*R_eff*K^T
     MatrixState I_KH = MatrixState::Identity() - K * H;
-    P_ = I_KH * P_ * I_KH.transpose() + K * R * K.transpose();
+    P_ = I_KH * P_ * I_KH.transpose() + K * R_eff * K.transpose();
     P_ = 0.5 * (P_ + P_.transpose()).eval();
 
     return nis;

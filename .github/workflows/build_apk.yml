@@ -35,25 +35,24 @@ jobs:
 
       - name: Build Core Native Library (C++ / NDK)
         run: |
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p android/app/src/main/jniLibs/armeabi-v7a
+          mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p mobile/android/app/src/main/jniLibs/armeabi-v7a
           cmake -B build/android_arm64 -S core \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/android_arm64 --target idr_core
-          cp build/android_arm64/libidr_core.a android/app/src/main/jniLibs/arm64-v8a/ || true
+          cp build/android_arm64/libidr_core.a mobile/android/app/src/main/jniLibs/arm64-v8a/ || true
 
       - name: Build Flutter Android APK
         run: |
-          cd android || cd .
+          cd mobile
           if [ -f "pubspec.yaml" ]; then
             flutter pub get
             flutter build apk --release --split-per-abi || flutter build apk --release
-          else
-            echo "Packaging release APK..."
-            python3 scripts/build_apk_stub.py
+            mkdir -p ../web/public/downloads/
+            cp build/app/outputs/flutter-apk/*.apk ../web/public/downloads/ || true
           fi
 
       - name: Upload APK Artifact

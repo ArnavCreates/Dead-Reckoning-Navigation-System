@@ -49,6 +49,15 @@ export const ingestRoutes: FastifyPluginAsync = async (app) => {
     const { device_id, trip_id, states = [], events = [], road_conditions = [] } = payload;
     const now = Date.now();
 
+    // Ensure device exists or auto-register device
+    const checkDevice = db.prepare("SELECT id FROM devices WHERE id = ?").get(device_id) as any;
+    if (!checkDevice) {
+      db.prepare(`
+        INSERT OR IGNORE INTO devices (id, name, key_hash, created_at, last_seen)
+        VALUES (?, ?, 'auto-registered', ?, ?)
+      `).run(device_id, `Device ${device_id}`, now, now);
+    }
+
     // Ensure trip exists or create
     const checkTrip = db.prepare("SELECT id FROM trips WHERE id = ?").get(trip_id) as any;
     if (!checkTrip) {

@@ -169,8 +169,8 @@ void NavigationEngine::run_10hz_cycle(int64_t now_ns) {
     speed_out.sigma_mps = 0.05;
   }
 
-  // M2 GLRT Stop Detector update
-  bool now_stationary = glrt_.process(filtered.accel_filtered, filtered.gyro_filtered,
+  // M2 GLRT Stop Detector update (evaluated in vehicle frame for robust reverse detection)
+  bool now_stationary = glrt_.process(f_v, omega_v,
                                       speed_out.mu_mps, speed_out.sigma_mps, 0.1);
 
   // Stop updates: ZUPT, ZARU and Gravity Leveling (§3.1, §3.2)
@@ -293,8 +293,10 @@ void NavigationEngine::run_10hz_cycle(int64_t now_ns) {
     shadow_filter_.mutable_state().p = Vector3d::Zero();
   }
 
-  // M3 Map Matching
-  double cur_heading_deg = std::fmod((std::atan2(main_filter_.state().v(1), main_filter_.state().v(0)) * RAD2DEG + 360.0), 360.0);
+  // M3 Map Matching: compute vehicle true heading from orientation R_wv = R * R_bv
+  Matrix3d R_wv = main_filter_.state().R * main_filter_.state().R_bv;
+  Vector3d fwd_w = R_wv.col(0); // Forward axis in World ENU
+  double cur_heading_deg = std::fmod((std::atan2(fwd_w(0), fwd_w(1)) * RAD2DEG + 360.0), 360.0);
   double shadow_sigma = std::sqrt(shadow_filter_.covariance()(6,6));
   auto match_res = map_matcher_.process(shadow_filter_.state().p.head<2>(), cur_heading_deg, shadow_sigma, 0.1);
 

@@ -1,48 +1,38 @@
-.PHONY: help setup fetch-data data sync truth labels calib fold-test splits outages \
-	ingest-own-logs regions fetch-osm maps tiles pack core core-test replay \
-	features train-stage1 train-stage2 export eval eval-publish \
-	backend-dev web-dev publish-replay secrets
+.PHONY: help setup sync export eval train-stage1 train-stage2 maps core core-test backend-dev web-dev
 
 help:
 	@echo "IDR 26168 Makefile Commands:"
-	@echo "  make setup          - Initialize python virtualenv, node packages, verify tools"
-	@echo "  make fetch-data     - Verify IO-VNBD dataset and IGRF-14 coefficients"
-	@echo "  make data           - Run IO-VNBD inventory, parse, canonicalize"
+	@echo "  make setup          - Initialize python virtualenv and node packages"
+	@echo "  make sync           - Run IO-VNBD sensor and reference synchronization"
+	@echo "  make maps           - Build regional offline SQLite maps"
+	@echo "  make export         - Export PyTorch models to ONNX"
+	@echo "  make eval           - Run benchmark evaluation suite"
 	@echo "  make core           - Compile C++ navigation engine"
 	@echo "  make core-test      - Run C++ unit and replay tests"
 	@echo "  make backend-dev    - Run backend Fastify service locally"
 	@echo "  make web-dev        - Run Vite frontend dev server"
 
 setup:
-	python -m uv venv .venv
+	python3 -m venv .venv
 	@echo "Setup completed successfully."
 
-fetch-data:
-	python ml/scripts/fetch_data.py
-
-data:
-	python ml/scripts/preprocess_iovnbd.py
-
 sync:
-	python ml/scripts/sync_sessions.py
+	PYTHONPATH=ml python3 -m idr_ml.sync.sync_iovnbd
 
-truth:
-	python ml/scripts/generate_truth.py
+maps:
+	python3 maps/scripts/build_india_maps.py
 
-labels:
-	python ml/scripts/generate_labels.py
+export:
+	PYTHONPATH=ml python3 ml/idr_ml/export/export_onnx.py
 
-calib:
-	python ml/scripts/run_calibration.py
+eval:
+	PYTHONPATH=ml python3 ml/idr_ml/eval/benchmark.py
 
-fold-test:
-	python ml/scripts/run_fold_test.py
+train-stage1:
+	PYTHONPATH=ml python3 ml/idr_ml/train/train_speed.py
 
-splits:
-	python ml/scripts/generate_splits.py
-
-outages:
-	python ml/scripts/index_outages.py
+train-stage2:
+	PYTHONPATH=ml python3 ml/idr_ml/train/train_adapter.py
 
 core:
 	cmake -B build/core -S core -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -56,6 +46,3 @@ backend-dev:
 
 web-dev:
 	cd web && pnpm dev
-
-secrets:
-	python ml/scripts/generate_secrets.py

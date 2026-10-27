@@ -69,9 +69,31 @@ int main(int argc, char** argv) {
   }
   std::cout << "Loaded " << all_nodes.size() << " source nodes. Computing UBODT with D_max=" << max_dist << "m...\n";
 
+  const char* q_create = "CREATE TABLE IF NOT EXISTS ubodt ("
+                         "source INTEGER NOT NULL, "
+                         "target INTEGER NOT NULL, "
+                         "next_n INTEGER NOT NULL, "
+                         "prev_n INTEGER NOT NULL, "
+                         "next_e INTEGER NOT NULL, "
+                         "cost REAL NOT NULL, "
+                         "PRIMARY KEY(source, target)"
+                         ") WITHOUT ROWID;";
+  char* err_msg = nullptr;
+  if (sqlite3_exec(db, q_create, nullptr, nullptr, &err_msg) != SQLITE_OK) {
+    std::cerr << "Failed to create ubodt table: " << (err_msg ? err_msg : "unknown error") << "\n";
+    if (err_msg) sqlite3_free(err_msg);
+    sqlite3_close(db);
+    return 1;
+  }
+
   sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
   const char* q_ins = "INSERT OR REPLACE INTO ubodt (source, target, next_n, prev_n, next_e, cost) VALUES (?, ?, ?, ?, ?, ?)";
-  sqlite3_prepare_v2(db, q_ins, -1, &stmt, nullptr);
+  if (sqlite3_prepare_v2(db, q_ins, -1, &stmt, nullptr) != SQLITE_OK) {
+    std::cerr << "Failed to prepare ubodt insert statement: " << sqlite3_errmsg(db) << "\n";
+    sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+    return 1;
+  }
 
   int64_t total_paths = 0;
   for (int64_t src : all_nodes) {

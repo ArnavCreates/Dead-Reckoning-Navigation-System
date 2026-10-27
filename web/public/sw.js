@@ -41,11 +41,13 @@ self.addEventListener("fetch", (event) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request).catch(() => {
+      return fetch(event.request).catch(async () => {
         // Fallback for offline navigation
         if (event.request.mode === "navigate") {
-          return caches.match("/index.html");
+          const fallback = await caches.match("/index.html");
+          if (fallback) return fallback;
         }
+        return new Response(null, { status: 503, statusText: "Service Unavailable (Offline)" });
       });
     })
   );

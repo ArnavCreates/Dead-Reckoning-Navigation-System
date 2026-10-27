@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libeigen3-dev libgeographiclib-dev libgtest-dev
+          sudo apt-get install -y cmake ninja-build libeigen3-dev libgeographiclib-dev libgtest-dev libsqlite3-dev
 
       - name: Configure CMake
         run: cmake -B build/core -S core -G Ninja -DCMAKE_BUILD_TYPE=Release

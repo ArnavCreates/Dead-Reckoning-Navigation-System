@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
 
     private var navService: NavService? = null
     private var isBound = false
+    private var pendingStartConfig: Triple<String, String, String>? = null
 
     private var stateSink: EventChannel.EventSink? = null
     private var eventSink: EventChannel.EventSink? = null
@@ -56,6 +57,11 @@ class MainActivity : FlutterActivity() {
                     eventSink?.success(map)
                 }
             }
+
+            pendingStartConfig?.let { (speedModel, adapterModel, mapDb) ->
+                navService?.startNavigation(speedModel, adapterModel, mapDb)
+                pendingStartConfig = null
+            }
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -75,14 +81,18 @@ class MainActivity : FlutterActivity() {
                     val adapterModel = call.argument<String>("adapterModel") ?: ""
                     val mapDb = call.argument<String>("mapDb") ?: ""
 
-                    val intent = Intent(this, NavService::class.java)
-                    startService(intent)
-                    bindService(intent, connection, Context.BIND_AUTO_CREATE)
-
-                    navService?.startNavigation(speedModel, adapterModel, mapDb)
+                    if (isBound && navService != null) {
+                        navService?.startNavigation(speedModel, adapterModel, mapDb)
+                    } else {
+                        pendingStartConfig = Triple(speedModel, adapterModel, mapDb)
+                        val intent = Intent(this, NavService::class.java)
+                        startService(intent)
+                        bindService(intent, connection, Context.BIND_AUTO_CREATE)
+                    }
                     result.success(true)
                 }
                 "stop" -> {
+                    pendingStartConfig = null
                     navService?.stopNavigation()
                     if (isBound) {
                         unbindService(connection)

@@ -415,11 +415,13 @@ def generate_mumbai_demo_pack(output_map_db: str = "maps/mumbai_metro/map.sqlite
 
     # Tunnel Registry (§3.3)
     # Eastern Freeway Anik Tunnel (way_id 1002)
-    tunnel_edges = [str(eid) for eid, u, v, l in edges_list if "Tunnel" in corridor["name"]]
+    cur.execute("SELECT id FROM edges WHERE way_id = 1002 AND tunnel = 1")
+    tunnel_eids = [str(r[0]) for r in cur.fetchall()]
+    edge_ids_str = ",".join(tunnel_eids) if tunnel_eids else "2,3"
     cur.execute("""
     INSERT INTO tunnels (id, edge_ids, way_ids, length_m, portal_a_lat_e7, portal_a_lon_e7, portal_b_lat_e7, portal_b_lon_e7, name)
-    VALUES (1, '2,3', '1002', 510.0, 190200000, 728750000, 190280000, 728780000, 'Eastern Freeway Anik Tunnel')
-    """)
+    VALUES (1, ?, '1002', 510.0, 190200000, 728750000, 190280000, 728780000, 'Eastern Freeway Anik Tunnel')
+    """, (edge_ids_str,))
 
     # UBODT upper-bounded origin-destination paths (< 500 m)
     # Shortest paths between topological neighbors

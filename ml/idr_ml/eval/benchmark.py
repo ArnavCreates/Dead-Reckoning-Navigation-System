@@ -65,9 +65,22 @@ def ensure_sync_csvs(session_ids: list[str], data_dir: str = "data/interim/io-vn
     return paths
 
 
+def get_default_replay_cli() -> str:
+    exe_suffix = ".exe" if sys.platform.startswith("win") else ""
+    candidates = [
+        f"build/core/replay_cli{exe_suffix}",
+        f"core/build/replay_cli{exe_suffix}",
+        f"build/replay_cli{exe_suffix}",
+    ]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return f"build/core/replay_cli{exe_suffix}"
+
+
 def run_benchmark(
     outages_parquet: str = "data/processed/outages.parquet",
-    replay_cli: str = "build/core/replay_cli.exe",
+    replay_cli: str = None,
     speed_model: str = "models/speed_tcn.onnx",
     noise_model: str = "models/noise_adapter.onnx",
     map_db: str = "maps/mumbai_metro/map.sqlite",
@@ -77,6 +90,8 @@ def run_benchmark(
     results_md: str = "docs/eval/RESULTS.md"
 ) -> pd.DataFrame:
     """Run full benchmark matrix across all outages and baselines."""
+    if replay_cli is None:
+        replay_cli = get_default_replay_cli()
     if baselines is None:
         baselines = ["idr", "ins", "nhc", "no_adapter", "whonet"]
 
@@ -300,7 +315,7 @@ def generate_markdown_report(df: pd.DataFrame, output_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IDR 26168 Benchmark Evaluation Suite")
     parser.add_argument("--outages", default="data/processed/outages.parquet")
-    parser.add_argument("--cli", default="build/core/replay_cli.exe")
+    parser.add_argument("--cli", default=get_default_replay_cli())
     parser.add_argument("--speed-model", default="models/speed_tcn.onnx")
     parser.add_argument("--noise-model", default="models/noise_adapter.onnx")
     parser.add_argument("--map", default="maps/mumbai_metro/map.sqlite")

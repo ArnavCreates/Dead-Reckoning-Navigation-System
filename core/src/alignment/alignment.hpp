@@ -124,15 +124,20 @@ public:
     } else if (state_ == AlignState::STATE_SUSPECT) {
       suspect_timer_s_ -= dt_s;
       if (trigger_suspect) {
-        // Confirmed slip -> MOVED: reset covariance and restart alignment
+        // Confirmed slip -> MOVED: alert listeners, reset covariance and restart alignment
         state_ = AlignState::STATE_MOVED;
+        moved_timer_s_ = 1.0; // Hold STATE_MOVED so callers / engine output observe the slip event
         sigma_theta_deg_ = 30.0;
         cusum_c_ = 0.0;
-        state_ = AlignState::STATE_UNALIGNED;
       } else if (suspect_timer_s_ <= 0.0) {
         // Not confirmed -> return to ALIGNED
         state_ = AlignState::STATE_ALIGNED;
         cusum_c_ = 0.0;
+      }
+    } else if (state_ == AlignState::STATE_MOVED) {
+      moved_timer_s_ -= dt_s;
+      if (moved_timer_s_ <= 0.0) {
+        state_ = AlignState::STATE_UNALIGNED;
       }
     }
   }
@@ -182,6 +187,7 @@ private:
   double sigma_theta_deg_{30.0};
   double cusum_c_{0.0};
   double suspect_timer_s_{0.0};
+  double moved_timer_s_{0.0};
   std::deque<Vector3d> tilt_buffer_;
 };
 
