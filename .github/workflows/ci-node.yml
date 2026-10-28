@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 24
           cache: 'pnpm'
+          cache-dependency-path: 'backend/pnpm-lock.yaml'
 
       - name: Build and Test Backend
         run: |

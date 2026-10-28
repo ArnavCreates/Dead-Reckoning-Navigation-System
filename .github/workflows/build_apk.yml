@@ -33,6 +33,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Install Native Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libeigen3-dev libgeographiclib-dev libsqlite3-dev
+
       - name: Build Core Native Library (C++ / NDK)
         run: |
           mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a

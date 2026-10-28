@@ -22,7 +22,8 @@ include_directories(
 find_package(Eigen3 3.3 QUIET)
 if(NOT Eigen3_FOUND)
   find_path(EIGEN3_INCLUDE_DIR NAMES signature_of_eigen3_matrix_library PATH_SUFFIXES eigen3 Eigen
-            PATHS /usr/include/eigen3 /usr/local/include/eigen3 /opt/homebrew/include/eigen3)
+            PATHS /usr/include/eigen3 /usr/local/include/eigen3 /opt/homebrew/include/eigen3
+            NO_CMAKE_FIND_ROOT_PATH)
   if(EIGEN3_INCLUDE_DIR)
     include_directories(${EIGEN3_INCLUDE_DIR})
     message(STATUS "Found Eigen3 headers: ${EIGEN3_INCLUDE_DIR}")
@@ -38,6 +39,14 @@ endif()
 
 # Find SQLite3
 find_package(SQLite3 REQUIRED)
+if(TARGET SQLite3::SQLite3)
+  set(SQLITE3_TARGET SQLite3::SQLite3)
+elseif(TARGET SQLite::SQLite3)
+  set(SQLITE3_TARGET SQLite::SQLite3)
+else()
+  include_directories(${SQLite3_INCLUDE_DIRS})
+  set(SQLITE3_TARGET ${SQLite3_LIBRARIES})
+endif()
 
 # Find GeographicLib
 find_package(GeographicLib QUIET)
@@ -47,9 +56,11 @@ elseif(GeographicLib_LIBRARIES)
   set(GEOGRAPHICLIB_LIBRARIES ${GeographicLib_LIBRARIES})
 else()
   find_path(GEOGRAPHICLIB_INCLUDE_DIR GeographicLib/Config.h PATH_SUFFIXES GeographicLib
-            PATHS /usr/include /usr/local/include /opt/homebrew/include)
+            PATHS /usr/include /usr/local/include /opt/homebrew/include
+            NO_CMAKE_FIND_ROOT_PATH)
   find_library(GEOGRAPHICLIB_LIB NAMES GeographicLib Geographic
-               PATHS /usr/lib /usr/local/lib /opt/homebrew/lib)
+               PATHS /usr/lib /usr/local/lib /opt/homebrew/lib
+               NO_CMAKE_FIND_ROOT_PATH)
   if(GEOGRAPHICLIB_INCLUDE_DIR AND GEOGRAPHICLIB_LIB)
     include_directories(${GEOGRAPHICLIB_INCLUDE_DIR})
     set(GEOGRAPHICLIB_LIBRARIES ${GEOGRAPHICLIB_LIB})
@@ -83,7 +94,7 @@ file(GLOB_RECURSE IDR_SOURCES
 
 add_library(idr_core STATIC ${IDR_SOURCES})
 target_compile_definitions(idr_core PUBLIC IDR_STATIC)
-target_link_libraries(idr_core PUBLIC SQLite3::SQLite3)
+target_link_libraries(idr_core PUBLIC ${SQLITE3_TARGET})
 if(GEOGRAPHICLIB_LIBRARIES)
   target_link_libraries(idr_core PUBLIC ${GEOGRAPHICLIB_LIBRARIES})
 endif()
@@ -103,7 +114,7 @@ endif()
 # Tools: ubodt_gen
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ubodt_gen/main.cpp")
   add_executable(ubodt_gen tools/ubodt_gen/main.cpp)
-  target_link_libraries(ubodt_gen PRIVATE idr_core SQLite3::SQLite3)
+  target_link_libraries(ubodt_gen PRIVATE idr_core ${SQLITE3_TARGET})
   if(MINGW)
     target_link_options(ubodt_gen PRIVATE -mconsole)
   endif()
