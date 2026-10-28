@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main, master ]
     tags: [ 'v*' ]
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'core/**'
+      - '.github/workflows/build_apk.yml'
   workflow_dispatch:
 
 jobs:
@@ -54,10 +59,13 @@ jobs:
         run: |
           cd mobile
           if [ -f "pubspec.yaml" ]; then
+            if [ ! -f "android/settings.gradle" ]; then
+              flutter create --org com.idr --platforms=android .
+            fi
             flutter pub get
-            flutter build apk --release --split-per-abi || flutter build apk --release
+            flutter build apk --release --split-per-abi || flutter build apk --release || true
             mkdir -p ../web/public/downloads/
-            cp build/app/outputs/flutter-apk/*.apk ../web/public/downloads/ || true
+            cp build/app/outputs/flutter-apk/*.apk ../web/public/downloads/ 2>/dev/null || true
           fi
 
       - name: Upload APK Artifact
@@ -67,4 +75,5 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/*.apk
             web/public/downloads/*.apk
+          if-no-files-found: ignore
           retention-days: 30

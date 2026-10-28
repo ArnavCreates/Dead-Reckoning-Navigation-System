@@ -34,18 +34,29 @@ if(NOT Eigen3_FOUND)
     message(FATAL_ERROR "Eigen3 not found")
   endif()
 else()
-  include_directories(${EIGEN3_INCLUDE_DIR})
+  include_directories(${EIGEN3_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${Eigen3_INCLUDE_DIRS})
 endif()
 
 # Find SQLite3
-find_package(SQLite3 REQUIRED)
-if(TARGET SQLite3::SQLite3)
-  set(SQLITE3_TARGET SQLite3::SQLite3)
-elseif(TARGET SQLite::SQLite3)
-  set(SQLITE3_TARGET SQLite::SQLite3)
+if(ANDROID)
+  find_library(SQLITE3_LIB sqlite3)
+  find_path(SQLITE3_INCLUDE_DIR sqlite3.h
+            PATHS /usr/include /usr/local/include
+            NO_CMAKE_FIND_ROOT_PATH)
+  if(SQLITE3_INCLUDE_DIR)
+    include_directories(${SQLITE3_INCLUDE_DIR})
+  endif()
+  set(SQLITE3_TARGET ${SQLITE3_LIB})
 else()
-  include_directories(${SQLite3_INCLUDE_DIRS})
-  set(SQLITE3_TARGET ${SQLite3_LIBRARIES})
+  find_package(SQLite3 REQUIRED)
+  if(TARGET SQLite3::SQLite3)
+    set(SQLITE3_TARGET SQLite3::SQLite3)
+  elseif(TARGET SQLite::SQLite3)
+    set(SQLITE3_TARGET SQLite::SQLite3)
+  else()
+    include_directories(${SQLite3_INCLUDE_DIRS})
+    set(SQLITE3_TARGET ${SQLite3_LIBRARIES})
+  endif()
 endif()
 
 # Find GeographicLib
@@ -58,13 +69,16 @@ else()
   find_path(GEOGRAPHICLIB_INCLUDE_DIR GeographicLib/Config.h PATH_SUFFIXES GeographicLib
             PATHS /usr/include /usr/local/include /opt/homebrew/include
             NO_CMAKE_FIND_ROOT_PATH)
-  find_library(GEOGRAPHICLIB_LIB NAMES GeographicLib Geographic
-               PATHS /usr/lib /usr/local/lib /opt/homebrew/lib
-               NO_CMAKE_FIND_ROOT_PATH)
-  if(GEOGRAPHICLIB_INCLUDE_DIR AND GEOGRAPHICLIB_LIB)
+  if(NOT ANDROID)
+    find_library(GEOGRAPHICLIB_LIB NAMES GeographicLib Geographic
+                 PATHS /usr/lib /usr/local/lib /opt/homebrew/lib)
+  endif()
+  if(GEOGRAPHICLIB_INCLUDE_DIR)
     include_directories(${GEOGRAPHICLIB_INCLUDE_DIR})
-    set(GEOGRAPHICLIB_LIBRARIES ${GEOGRAPHICLIB_LIB})
-    message(STATUS "Found GeographicLib: ${GEOGRAPHICLIB_LIB}")
+    if(GEOGRAPHICLIB_LIB)
+      set(GEOGRAPHICLIB_LIBRARIES ${GEOGRAPHICLIB_LIB})
+      message(STATUS "Found GeographicLib: ${GEOGRAPHICLIB_LIB}")
+    endif()
   elseif(WIN32 AND EXISTS "C:/msys64/ucrt64/include/GeographicLib")
     include_directories("C:/msys64/ucrt64/include")
     link_directories("C:/msys64/ucrt64/lib")
@@ -74,17 +88,28 @@ else()
 endif()
 
 # ONNX Runtime (C++ API)
+unset(ORT_LIBRARIES)
 if(DEFINED ENV{ORT_ROOT} AND EXISTS "$ENV{ORT_ROOT}")
   set(ORT_ROOT "$ENV{ORT_ROOT}")
-else()
+elseif(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/onnxruntime-win-x64-1.19.2")
   set(ORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime/onnxruntime-win-x64-1.19.2")
 endif()
-if(EXISTS "${ORT_ROOT}")
-  include_directories("${ORT_ROOT}/include")
-  link_directories("${ORT_ROOT}/lib")
-  set(ORT_LIBRARIES onnxruntime)
-  add_compile_definitions(ORT_API_VERSION=17)
-  message(STATUS "Using ONNX Runtime from ${ORT_ROOT}")
+
+if(DEFINED ORT_ROOT AND EXISTS "${ORT_ROOT}")
+  find_library(ORT_LIB NAMES onnxruntime PATHS "${ORT_ROOT}/lib" NO_DEFAULT_PATH)
+  if(ORT_LIB)
+    include_directories("${ORT_ROOT}/include")
+    set(ORT_LIBRARIES ${ORT_LIB})
+    message(STATUS "Using ONNX Runtime from ${ORT_ROOT}: ${ORT_LIB}")
+  endif()
+else()
+  find_library(ORT_LIB NAMES onnxruntime)
+  find_path(ORT_INCLUDE_DIR NAMES onnxruntime_cxx_api.h)
+  if(ORT_LIB AND ORT_INCLUDE_DIR)
+    include_directories(${ORT_INCLUDE_DIR})
+    set(ORT_LIBRARIES ${ORT_LIB})
+    message(STATUS "Found system ONNX Runtime: ${ORT_LIB}")
+  endif()
 endif()
 
 # Core sources
@@ -102,58 +127,60 @@ if(ORT_LIBRARIES)
   target_link_libraries(idr_core PUBLIC ${ORT_LIBRARIES})
 endif()
 
-# Tools: replay_cli
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/replay_cli/main.cpp")
-  add_executable(replay_cli tools/replay_cli/main.cpp)
-  target_link_libraries(replay_cli PRIVATE idr_core)
-  if(MINGW)
-    target_link_options(replay_cli PRIVATE -mconsole)
-  endif()
-endif()
-
-# Tools: ubodt_gen
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ubodt_gen/main.cpp")
-  add_executable(ubodt_gen tools/ubodt_gen/main.cpp)
-  target_link_libraries(ubodt_gen PRIVATE idr_core ${SQLITE3_TARGET})
-  if(MINGW)
-    target_link_options(ubodt_gen PRIVATE -mconsole)
-  endif()
-endif()
-
-# Tests
-enable_testing()
-find_package(GTest QUIET)
-if(NOT GTest_FOUND)
-  if(WIN32 AND EXISTS "C:/msys64/ucrt64/include/gtest")
-    include_directories("C:/msys64/ucrt64/include")
-    link_directories("C:/msys64/ucrt64/lib")
-    set(GTEST_LIBRARIES gtest gtest_main)
-    set(GTest_FOUND TRUE)
-  endif()
-endif()
-
-if(GTest_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit")
-  file(GLOB_RECURSE TEST_SOURCES "tests/unit/*.cpp")
-  if(TEST_SOURCES)
-    add_executable(idr_unit_tests ${TEST_SOURCES})
-    if(TARGET GTest::gtest)
-      target_link_libraries(idr_unit_tests PRIVATE idr_core GTest::gtest GTest::gtest_main)
-    else()
-      target_link_libraries(idr_unit_tests PRIVATE idr_core ${GTEST_LIBRARIES})
-    endif()
+if(NOT ANDROID)
+  # Tools: replay_cli
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/replay_cli/main.cpp")
+    add_executable(replay_cli tools/replay_cli/main.cpp)
+    target_link_libraries(replay_cli PRIVATE idr_core)
     if(MINGW)
-      target_link_options(idr_unit_tests PRIVATE -mconsole)
+      target_link_options(replay_cli PRIVATE -mconsole)
     endif()
-    if(EXISTS "${ORT_ROOT}/lib/onnxruntime.dll")
-      add_custom_command(TARGET idr_unit_tests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${ORT_ROOT}/lib/onnxruntime.dll"
-          "$<TARGET_FILE_DIR:idr_unit_tests>"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${ORT_ROOT}/lib/onnxruntime_providers_shared.dll"
-          "$<TARGET_FILE_DIR:idr_unit_tests>"
-      )
+  endif()
+
+  # Tools: ubodt_gen
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ubodt_gen/main.cpp")
+    add_executable(ubodt_gen tools/ubodt_gen/main.cpp)
+    target_link_libraries(ubodt_gen PRIVATE idr_core ${SQLITE3_TARGET})
+    if(MINGW)
+      target_link_options(ubodt_gen PRIVATE -mconsole)
     endif()
-    add_test(NAME UnitTests COMMAND idr_unit_tests)
+  endif()
+
+  # Tests
+  enable_testing()
+  find_package(GTest QUIET)
+  if(NOT GTest_FOUND)
+    if(WIN32 AND EXISTS "C:/msys64/ucrt64/include/gtest")
+      include_directories("C:/msys64/ucrt64/include")
+      link_directories("C:/msys64/ucrt64/lib")
+      set(GTEST_LIBRARIES gtest gtest_main)
+      set(GTest_FOUND TRUE)
+    endif()
+  endif()
+
+  if(GTest_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit")
+    file(GLOB_RECURSE TEST_SOURCES "tests/unit/*.cpp")
+    if(TEST_SOURCES)
+      add_executable(idr_unit_tests ${TEST_SOURCES})
+      if(TARGET GTest::gtest)
+        target_link_libraries(idr_unit_tests PRIVATE idr_core GTest::gtest GTest::gtest_main)
+      else()
+        target_link_libraries(idr_unit_tests PRIVATE idr_core ${GTEST_LIBRARIES})
+      endif()
+      if(MINGW)
+        target_link_options(idr_unit_tests PRIVATE -mconsole)
+      endif()
+      if(EXISTS "${ORT_ROOT}/lib/onnxruntime.dll")
+        add_custom_command(TARGET idr_unit_tests POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/lib/onnxruntime.dll"
+            "$<TARGET_FILE_DIR:idr_unit_tests>"
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/lib/onnxruntime_providers_shared.dll"
+            "$<TARGET_FILE_DIR:idr_unit_tests>"
+        )
+      endif()
+      add_test(NAME UnitTests COMMAND idr_unit_tests)
+    endif()
   endif()
 endif()

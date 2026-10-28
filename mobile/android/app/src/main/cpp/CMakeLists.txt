@@ -15,12 +15,13 @@ include_directories(
 find_package(Eigen3 3.3 QUIET)
 if(NOT Eigen3_FOUND)
   find_path(EIGEN3_INCLUDE_DIR NAMES signature_of_eigen3_matrix_library PATH_SUFFIXES eigen3 Eigen
-            PATHS /usr/include/eigen3 /usr/local/include/eigen3 /opt/homebrew/include/eigen3)
+            PATHS /usr/include/eigen3 /usr/local/include/eigen3 /opt/homebrew/include/eigen3
+            NO_CMAKE_FIND_ROOT_PATH)
   if(EIGEN3_INCLUDE_DIR)
     include_directories(${EIGEN3_INCLUDE_DIR})
   endif()
 else()
-  include_directories(${EIGEN3_INCLUDE_DIR})
+  include_directories(${EIGEN3_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${Eigen3_INCLUDE_DIRS})
 endif()
 
 find_library(log-lib log)
