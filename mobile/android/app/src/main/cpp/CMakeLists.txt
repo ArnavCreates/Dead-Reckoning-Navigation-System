@@ -46,4 +46,8 @@ if(NOT ANDROID_LOG_LIB)
 endif()
 
 add_library(idr_core_jni SHARED idr_jni.cpp)
+target_include_directories(idr_core_jni PRIVATE
+  "${IDR_CORE_DIR}/include"
+  "${IDR_CORE_DIR}/src"
+)
 target_link_libraries(idr_core_jni PRIVATE idr_core ${ANDROID_LOG_LIB})
