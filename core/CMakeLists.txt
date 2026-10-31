@@ -39,14 +39,25 @@ endif()
 
 # Find SQLite3
 if(ANDROID)
-  find_library(SQLITE3_LIB sqlite3)
-  find_path(SQLITE3_INCLUDE_DIR sqlite3.h
-            PATHS /usr/include /usr/local/include
-            NO_CMAKE_FIND_ROOT_PATH)
-  if(SQLITE3_INCLUDE_DIR)
-    include_directories(${SQLITE3_INCLUDE_DIR})
+  include(FetchContent)
+  FetchContent_Populate(idr_sqlite3_amalgamation
+    URL https://sqlite.org/2026/sqlite-amalgamation-3540100.zip
+    URL_HASH SHA256=0A9C8E34352DAD46006AA82836D5383BFF9DC6BC9CE5A60553C05AA30E6AD1F9
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+
+  set(IDR_SQLITE3_SOURCE_DIR "${idr_sqlite3_amalgamation_SOURCE_DIR}/sqlite-amalgamation-3540100")
+  if(NOT EXISTS "${IDR_SQLITE3_SOURCE_DIR}/sqlite3.c")
+    set(IDR_SQLITE3_SOURCE_DIR "${idr_sqlite3_amalgamation_SOURCE_DIR}")
   endif()
-  set(SQLITE3_TARGET ${SQLITE3_LIB})
+  if(NOT EXISTS "${IDR_SQLITE3_SOURCE_DIR}/sqlite3.c" OR NOT EXISTS "${IDR_SQLITE3_SOURCE_DIR}/sqlite3.h")
+    message(FATAL_ERROR "The pinned SQLite amalgamation did not contain sqlite3.c and sqlite3.h")
+  endif()
+
+  add_library(idr_sqlite3 STATIC "${IDR_SQLITE3_SOURCE_DIR}/sqlite3.c")
+  target_include_directories(idr_sqlite3 PUBLIC "${IDR_SQLITE3_SOURCE_DIR}")
+  target_compile_definitions(idr_sqlite3 PRIVATE SQLITE_ENABLE_RTREE)
+  set(SQLITE3_TARGET idr_sqlite3)
 else()
   find_package(SQLite3 REQUIRED)
   if(TARGET SQLite3::SQLite3)
@@ -60,30 +71,34 @@ else()
 endif()
 
 # Find GeographicLib
-find_package(GeographicLib QUIET)
-if(TARGET GeographicLib::GeographicLib)
-  set(GEOGRAPHICLIB_LIBRARIES GeographicLib::GeographicLib)
-elseif(GeographicLib_LIBRARIES)
-  set(GEOGRAPHICLIB_LIBRARIES ${GeographicLib_LIBRARIES})
+if(TARGET GeographicLib::GeographicLib_STATIC)
+  set(GEOGRAPHICLIB_LIBRARIES GeographicLib::GeographicLib_STATIC)
 else()
-  find_path(GEOGRAPHICLIB_INCLUDE_DIR GeographicLib/Config.h PATH_SUFFIXES GeographicLib
-            PATHS /usr/include /usr/local/include /opt/homebrew/include
-            NO_CMAKE_FIND_ROOT_PATH)
-  if(NOT ANDROID)
+  find_package(GeographicLib QUIET)
+  if(TARGET GeographicLib::GeographicLib)
+    set(GEOGRAPHICLIB_LIBRARIES GeographicLib::GeographicLib)
+  elseif(GeographicLib_LIBRARIES)
+    set(GEOGRAPHICLIB_LIBRARIES ${GeographicLib_LIBRARIES})
+  elseif(ANDROID)
+    message(FATAL_ERROR "Android builds must add a target-ABI GeographicLib library before core")
+  else()
+    find_path(GEOGRAPHICLIB_INCLUDE_DIR GeographicLib/Config.h PATH_SUFFIXES GeographicLib
+              PATHS /usr/include /usr/local/include /opt/homebrew/include
+              NO_CMAKE_FIND_ROOT_PATH)
     find_library(GEOGRAPHICLIB_LIB NAMES GeographicLib Geographic
                  PATHS /usr/lib /usr/local/lib /opt/homebrew/lib)
-  endif()
-  if(GEOGRAPHICLIB_INCLUDE_DIR)
-    include_directories(${GEOGRAPHICLIB_INCLUDE_DIR})
-    if(GEOGRAPHICLIB_LIB)
-      set(GEOGRAPHICLIB_LIBRARIES ${GEOGRAPHICLIB_LIB})
-      message(STATUS "Found GeographicLib: ${GEOGRAPHICLIB_LIB}")
+    if(GEOGRAPHICLIB_INCLUDE_DIR)
+      include_directories(${GEOGRAPHICLIB_INCLUDE_DIR})
+      if(GEOGRAPHICLIB_LIB)
+        set(GEOGRAPHICLIB_LIBRARIES ${GEOGRAPHICLIB_LIB})
+        message(STATUS "Found GeographicLib: ${GEOGRAPHICLIB_LIB}")
+      endif()
+    elseif(WIN32 AND EXISTS "C:/msys64/ucrt64/include/GeographicLib")
+      include_directories("C:/msys64/ucrt64/include")
+      link_directories("C:/msys64/ucrt64/lib")
+      set(GEOGRAPHICLIB_LIBRARIES GeographicLib)
+      message(STATUS "Using GeographicLib from C:/msys64/ucrt64")
     endif()
-  elseif(WIN32 AND EXISTS "C:/msys64/ucrt64/include/GeographicLib")
-    include_directories("C:/msys64/ucrt64/include")
-    link_directories("C:/msys64/ucrt64/lib")
-    set(GEOGRAPHICLIB_LIBRARIES GeographicLib)
-    message(STATUS "Using GeographicLib from C:/msys64/ucrt64")
   endif()
 endif()
 
