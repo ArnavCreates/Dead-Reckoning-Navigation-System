@@ -2,7 +2,7 @@ name: Build Android APK Release
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'codex/**' ]
     tags: [ 'v*' ]
   pull_request:
     paths:
