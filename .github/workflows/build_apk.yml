@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout Codebase
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -38,42 +38,61 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Generate Android project files
+        run: |
+          set -euo pipefail
+          cd mobile
+          test -f pubspec.yaml
+          if [ ! -f "android/settings.gradle" ]; then
+            flutter create --org com.idr --platforms=android .
+          fi
+
       - name: Install Native Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libeigen3-dev libgeographiclib-dev libsqlite3-dev
+          sudo apt-get install -y cmake ninja-build libeigen3-dev
 
-      - name: Build Core Native Library (C++ / NDK)
+      - name: Build JNI Core for Android ABIs (C++ / NDK)
         run: |
-          mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p mobile/android/app/src/main/jniLibs/armeabi-v7a
-          cmake -B build/android_arm64 -S core \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-26 \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/android_arm64 --target idr_core
-          cp build/android_arm64/libidr_core.a mobile/android/app/src/main/jniLibs/arm64-v8a/ || true
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a; do
+            build_dir="build/android_${abi}"
+            cmake -S mobile/android/app/src/main/cpp -B "$build_dir" -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI="$abi" \
+              -DANDROID_PLATFORM=android-26 \
+              -DANDROID_STL=c++_static \
+              -DCMAKE_BUILD_TYPE=Release
+            cmake --build "$build_dir" --target idr_core_jni
+            mkdir -p "mobile/android/app/src/main/jniLibs/$abi"
+            lib_path="$(find "$build_dir" -type f -name libidr_core_jni.so -print -quit)"
+            test -s "$lib_path"
+            cp "$lib_path" "mobile/android/app/src/main/jniLibs/$abi/"
+          done
 
       - name: Build Flutter Android APK
         run: |
+          set -euo pipefail
           cd mobile
-          if [ -f "pubspec.yaml" ]; then
-            if [ ! -f "android/settings.gradle" ]; then
-              flutter create --org com.idr --platforms=android .
-            fi
-            flutter pub get
-            flutter build apk --release --split-per-abi || flutter build apk --release || true
-            mkdir -p ../web/public/downloads/
-            cp build/app/outputs/flutter-apk/*.apk ../web/public/downloads/ 2>/dev/null || true
-          fi
+          flutter pub get
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+          apk_dir="build/app/outputs/flutter-apk"
+          test -s "$apk_dir/app-arm64-v8a-release.apk"
+          test -s "$apk_dir/app-armeabi-v7a-release.apk"
+
+      - name: Verify APKs contain the native core for each ABI
+        run: |
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a; do
+            apk="mobile/build/app/outputs/flutter-apk/app-${abi}-release.apk"
+            test -s "$apk"
+            jar tf "$apk" | grep -Fx "lib/$abi/libidr_core_jni.so"
+          done
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: idr-navigation-release-apk
-          path: |
-            build/app/outputs/flutter-apk/*.apk
-            web/public/downloads/*.apk
-          if-no-files-found: ignore
+          path: mobile/build/app/outputs/flutter-apk/app-*-release.apk
+          if-no-files-found: error
           retention-days: 30

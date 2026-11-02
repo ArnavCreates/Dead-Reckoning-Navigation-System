@@ -14,7 +14,6 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.5
   path_provider: ^2.1.5
-  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
@@ -26,3 +25,4 @@ flutter:
   assets:
     - assets/models/
     - assets/maps/
+    - assets/licenses/THIRD_PARTY_NOTICES.txt
